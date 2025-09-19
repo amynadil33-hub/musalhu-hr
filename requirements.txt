@@ -1,5 +1,6 @@
 fastapi
 uvicorn
-openai
+openai>=1.0.0
 googletrans-py
+google-trans-new
 pydantic

@@ -1,17 +1,27 @@
 from fastapi import FastAPI, Header, HTTPException
 from pydantic import BaseModel
-import openai
 import os
-from googletrans import Translator
+from openai import OpenAI
 
-# Load OpenAI API key from environment variables
-openai.api_key = os.getenv("OPENAI_API_KEY")
+# Try multiple googletrans forks for Translator
+try:
+    from googletrans import Translator
+except ImportError:
+    try:
+        from googletrans.client import Translator
+    except ImportError:
+        from google_trans_new import google_translator as Translator
 
-# 🔒 Fixed Musalhu key (no env var confusion)
+# Initialize OpenAI client
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+# Fixed Musalhu API key
 API_KEY = "musalhuX-super-secret-key"
 
 app = FastAPI()
-translator = Translator()
+
+# Initialize translator safely
+translator = Translator() if callable(Translator) else Translator
 
 class HRRequest(BaseModel):
     message: str
@@ -27,10 +37,13 @@ async def chat_hr(req: HRRequest, x_api_key: str = Header(None)):
 
     # Translate Dhivehi → English if needed
     if req.lang == "dv":
-        text = translator.translate(text, src="dv", dest="en").text
+        try:
+            text = translator.translate(text, src="dv", dest="en").text
+        except Exception:
+            pass  # fallback if translation fails
 
     # Call OpenAI
-    completion = openai.ChatCompletion.create(
+    completion = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": "You are Musalhu HR Assistant for Maldivian SMEs."},
@@ -38,10 +51,13 @@ async def chat_hr(req: HRRequest, x_api_key: str = Header(None)):
         ]
     )
 
-    output = completion.choices[0].message["content"]
+    output = completion.choices[0].message.content
 
-    # Translate back if Dhivehi requested
+    # Translate back to Dhivehi if needed
     if req.lang == "dv":
-        output = translator.translate(output, src="en", dest="dv").text
+        try:
+            output = translator.translate(output, src="en", dest="dv").text
+        except Exception:
+            pass
 
     return {"output": output}
